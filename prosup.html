@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aethel — Hand Rotation Assessment</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyCIijYBeCcyl8Mt414nueAgIId8PfWaW5M",
+    authDomain: "pdstudy-99397.firebaseapp.com",
+    projectId: "pdstudy-99397",
+    storageBucket: "pdstudy-99397.firebasestorage.app",
+    messagingSenderId: "235927780090",
+    appId: "1:235927780090:web:348a8c85c130371686a743"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const urlParams = new URLSearchParams(window.location.search);
+let participantID = urlParams.get('PROLIFIC_PID')
+                 || urlParams.get('prolificPID')
+                 || sessionStorage.getItem('prolificID')
+                 || `anon_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+sessionStorage.setItem('prolificID', participantID);
+
+const deviceInfo = {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    screenWidth: screen.width,
+    screenHeight: screen.height,
+    devicePixelRatio: window.devicePixelRatio,
+    touchPoints: navigator.maxTouchPoints || 0,
+    timestamp: new Date().toISOString()
+};
+db.collection("ProSupParticipants").doc(participantID)
+  .set({ deviceInfo, startedAt: new Date().toISOString() }, { merge: true })
+  .catch(() => {});
+</script>
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg: #fafafa;
+    --panel: rgba(255,255,255,0.75);
+    --border: rgba(0,0,0,0.06);
+    --text: #1a1a1a;
+    --muted: #666666;
+    --subtle: #999999;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --purple: #8b5cf6;
+}
+
+body {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    height: 100vh;
+    overflow: hidden;
+    font-size: 1rem;
+}
+body.results-mode { overflow: auto; height: auto; min-height: 100vh; }
+body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+        radial-gradient(circle at 20% 80%, rgba(59,130,246,.03) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(34,197,94,.03) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(147,51,234,.02) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+}
+
+.geo { position: fixed; pointer-events: none; opacity: .03; z-index: 0; }
+.geo-1 {
+    width: 400px; height: 400px;
+    background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+    top: -200px; right: -200px;
+    animation: float1 20s ease-in-out infinite;
+}
+.geo-2 {
+    width: 300px; height: 300px;
+    background: linear-gradient(135deg, #22c55e, #10b981);
+    border-radius: 50%;
+    bottom: -150px; left: -150px;
+    animation: float2 25s ease-in-out infinite;
+}
+@keyframes float1 { 0%,100%{transform:translate(0,0) rotate(0deg)} 50%{transform:translate(-30px,30px) rotate(180deg)} }
+@keyframes float2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(30px,-30px) scale(1.1)} }
+@keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+@keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── MOBILE BLOCK ── */
+#mobile-block {
+    display: none;
+    position: fixed; inset: 0;
+    background: #fff; z-index: 99999;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 3rem; text-align: center;
+}
+#mobile-block.visible { display: flex; }
+
+/* ── WELCOME ── */
+#welcome-screen {
+    position: fixed; inset: 0;
+    background: var(--bg); z-index: 900;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem; text-align: center;
+    animation: slideUp .4s ease;
+}
+#welcome-screen.hidden { display: none; }
+.welcome-inner { max-width: 680px; width: 100%; }
+.welcome-badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .7rem; font-weight: 500;
+    letter-spacing: .15em; text-transform: uppercase;
+    color: var(--blue); background: rgba(59,130,246,.08);
+    border: 1px solid rgba(59,130,246,.2);
+    padding: .35rem 1rem; border-radius: 50px;
+    margin-bottom: 1.5rem;
+}
+.welcome-title {
+    font-size: clamp(2.2rem, 5vw, 3.5rem);
+    font-weight: 200; letter-spacing: -.03em;
+    color: var(--text); margin-bottom: 1rem; line-height: 1.15;
+}
+.welcome-subtitle {
+    font-size: 1.1rem; color: var(--muted);
+    max-width: 500px; margin: 0 auto 2rem; line-height: 1.7;
+}
+
+/* Arm position diagram */
+.arm-diagram {
+    background: white; border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.5rem; margin: 2rem 0;
+    box-shadow: 0 2px 12px rgba(0,0,0,.04);
+}
+.arm-diagram-title {
+    font-size: .75rem; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 1rem;
+}
+.welcome-steps {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+    gap: 1rem; margin: 1.5rem 0;
+    text-align: left;
+}
+.step-card {
+    background: white; border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.25rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,.03);
+}
+.step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; font-weight: 500; color: var(--blue);
+    letter-spacing: .1em; text-transform: uppercase; margin-bottom: .5rem;
+}
+.step-text { font-size: .9rem; color: var(--text); line-height: 1.5; }
+
+.btn-primary {
+    display: inline-flex; align-items: center; gap: .5rem;
+    background: var(--text); color: white;
+    border: none; padding: 1rem 2.5rem;
+    font-size: 1rem; font-weight: 500;
+    border-radius: 50px; cursor: pointer;
+    transition: all .2s ease; font-family: 'Inter', sans-serif;
+    margin-top: 1rem;
+}
+.btn-primary:hover { background: #333; transform: translateY(-1px); }
+
+/* ── LOADING OVERLAY ── */
+#loading-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(255,255,255,.95);
+    backdrop-filter: blur(20px);
+    z-index: 8000;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.5rem;
+}
+#loading-overlay.visible { display: flex; }
+.loader-ring {
+    width: 56px; height: 56px;
+    border: 3px solid rgba(59,130,246,.15);
+    border-top: 3px solid var(--blue);
+    border-radius: 50%; animation: spin 1s linear infinite;
+}
+.loader-title { font-size: 1.2rem; font-weight: 400; color: var(--text); }
+#loader-status { font-size: .9rem; color: var(--muted); }
+.loader-bar-wrap { width: 280px; height: 4px; background: rgba(59,130,246,.12); border-radius: 2px; overflow: hidden; }
+.loader-bar { height: 100%; background: linear-gradient(90deg, var(--blue), var(--purple)); border-radius: 2px; transition: width .3s ease; width: 0%; }
+
+/* ── CALIBRATION OVERLAY ── */
+/* Sits on top of the assessment page (which stays visible/rendering).
+   Dark semi-transparent so the video feed shows through on the right. */
+#calib-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    /* only darken the left instruction panel — right video panel stays fully clear */
+    background: linear-gradient(to right, rgba(10,10,10,.92) 42%, transparent 56%);
+    z-index: 7000;
+    flex-direction: column; align-items: flex-start; justify-content: center;
+    padding: 4rem 5vw; text-align: left;
+}
+#calib-overlay.visible { display: flex; }
+.calib-phase { font-size: .75rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin-bottom: 1rem; }
+.calib-title { font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 200; letter-spacing: -.02em; color: #fff; margin-bottom: 1rem; }
+.calib-instruction { font-size: 1.1rem; color: rgba(255,255,255,.65); max-width: 420px; line-height: 1.75; }
+.calib-instruction strong { color: #fff; }
+.calib-countdown {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8rem; font-weight: 200; color: #fff;
+    line-height: 1; margin: 2rem 0 1.5rem;
+    letter-spacing: -.04em;
+}
+.calib-progress {
+    width: 240px; height: 5px;
+    background: rgba(255,255,255,.15); border-radius: 3px; overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+.calib-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    border-radius: 3px; width: 0%;
+}
+.calib-angle-live {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem; color: rgba(255,255,255,.45); margin-top: .5rem;
+}
+
+/* ── BETWEEN-TRIAL OVERLAY ── */
+#trial-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(20px);
+    z-index: 6000;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 3rem; text-align: center;
+}
+#trial-overlay.visible { display: flex; }
+.trial-ov-label { font-size: .75rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.5rem; }
+.trial-ov-title { font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 200; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 1.5rem; }
+.trial-ov-instruction { font-size: 1.15rem; color: var(--text); max-width: 520px; margin: 0 auto 2rem; line-height: 1.7; }
+.trial-ov-instruction strong { color: var(--red); font-weight: 600; }
+.trial-ov-footer {
+    font-size: .95rem; color: var(--muted);
+    background: rgba(0,0,0,.05); padding: .9rem 2rem;
+    border-radius: 50px; display: inline-block;
+}
+.rest-bar-wrap { width: 300px; height: 5px; background: rgba(0,0,0,.08); border-radius: 3px; overflow: hidden; margin: 1.5rem auto 0; }
+.rest-bar { height: 100%; background: var(--green); border-radius: 3px; transition: width .1s linear; width: 100%; }
+
+/* ── MAIN ASSESSMENT ── */
+#assessment-page { display: none; }
+#assessment-page.visible { display: block; }
+.main-container {
+    display: flex; height: 100vh; width: 100vw;
+    position: relative; z-index: 2;
+}
+
+/* Left panel */
+.left-panel {
+    width: 320px; flex-shrink: 0;
+    display: flex; flex-direction: column;
+    padding: 2.5rem 2rem;
+    background: var(--panel); backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border);
+    z-index: 10;
+}
+.panel-brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; font-weight: 500; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 2rem;
+}
+.timer-display {
+    font-size: 5.5rem; font-weight: 200;
+    color: var(--text); line-height: 1;
+    letter-spacing: -.03em; margin-bottom: .25rem;
+}
+.rots-counter { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 2.5rem; }
+.rots-num {
+    font-size: 6.5rem; font-weight: 100;
+    color: var(--text); letter-spacing: -.04em; line-height: 1;
+    font-family: 'JetBrains Mono', monospace;
+}
+.rots-label {
+    font-size: 1.1rem; font-weight: 400; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .06em;
+}
+.trial-meta { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+.trial-seq-label {
+    font-size: .85rem; color: var(--subtle); font-weight: 500;
+    text-transform: uppercase; letter-spacing: .1em; margin-bottom: .5rem;
+}
+.hand-label { font-size: 2.4rem; font-weight: 300; letter-spacing: -.02em; }
+
+.live-metrics {
+    display: flex; flex-direction: column; gap: .75rem;
+    margin-bottom: 1.5rem;
+}
+.metric-row { display: flex; justify-content: space-between; align-items: baseline; }
+.metric-name { font-size: .8rem; color: var(--subtle); text-transform: uppercase; letter-spacing: .08em; }
+.metric-val { font-family: 'JetBrains Mono', monospace; font-size: .95rem; color: var(--text); }
+
+.guidelines {
+    background: rgba(247,247,247,.6); border-radius: 10px;
+    padding: 1rem; border: 1px solid var(--border); flex: 1;
+}
+.guidelines h3 {
+    font-size: .75rem; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: .75rem;
+}
+.guideline-item {
+    font-size: .9rem; color: var(--text); line-height: 1.5;
+    padding-left: 1.25rem; position: relative; margin-bottom: .5rem;
+}
+.guideline-item::before {
+    content: '';
+    position: absolute; left: 0; top: .55rem;
+    width: 4px; height: 4px; background: var(--green); border-radius: 50%;
+}
+
+/* Right panel */
+.right-panel {
+    flex: 1; background: #000; position: relative; overflow: hidden;
+}
+video, canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; object-fit: cover;
+}
+video#cam { transform: scaleX(-1); }
+canvas#overlay { transform: scaleX(-1); }
+
+/* Status pill */
+.status-pill {
+    position: absolute; bottom: 2.5rem; left: 50%;
+    transform: translateX(-50%);
+    font-size: 1rem; font-weight: 500; color: white;
+    background: rgba(0,0,0,.75); backdrop-filter: blur(12px);
+    padding: .9rem 2rem; border-radius: 50px;
+    white-space: nowrap; z-index: 200;
+    transition: background .3s ease;
+}
+.status-pill.ok   { background: rgba(34,197,94,.85); }
+.status-pill.warn { background: rgba(245,158,11,.85); }
+.status-pill.err  { background: rgba(239,68,68,.85); }
+
+/* Center timer on video */
+.center-timer {
+    position: absolute; top: 38%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13rem; font-weight: 200;
+    color: rgba(255,255,255,.55);
+    text-shadow: 0 0 30px rgba(59,130,246,.6);
+    z-index: 210; letter-spacing: -.04em; line-height: 1;
+    display: none; pointer-events: none;
+}
+
+/* Rotation count on video */
+.center-rots {
+    position: absolute; top: 65%; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.5rem; font-weight: 300;
+    color: rgba(34,197,94,.9);
+    text-shadow: 0 0 20px rgba(34,197,94,.7);
+    z-index: 211; letter-spacing: -.02em;
+    display: none; pointer-events: none;
+    white-space: nowrap;
+}
+
+/* Angle bar */
+.angle-bar-wrap {
+    position: absolute; top: 1.5rem; left: 50%;
+    transform: translateX(-50%);
+    width: 180px; z-index: 220;
+    display: none;
+}
+.angle-bar-track {
+    height: 6px; background: rgba(255,255,255,.15);
+    border-radius: 3px; position: relative; overflow: visible;
+}
+.angle-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: var(--green); transition: width .05s linear;
+    position: absolute; left: 50%; transform-origin: left;
+}
+.angle-bar-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .75rem; color: rgba(255,255,255,.6);
+    text-align: center; margin-top: .4rem;
+}
+
+/* ── QUESTIONNAIRE ── */
+#questionnaire-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(20px);
+    z-index: 9500;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem; overflow-y: auto;
+}
+#questionnaire-overlay.visible { display: flex; }
+.q-inner { max-width: 700px; width: 100%; }
+.q-title { font-size: 2.2rem; font-weight: 200; letter-spacing: -.02em; margin-bottom: .5rem; }
+.q-sub { font-size: 1rem; color: var(--muted); margin-bottom: 2rem; }
+.q-group { margin-bottom: 1.5rem; padding: 1rem; background: rgba(0,0,0,.02); border-radius: 10px; border: 1px solid var(--border); }
+.q-group label { font-size: 1rem; font-weight: 500; display: block; margin-bottom: .5rem; }
+.q-radio-group { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.q-radio-group label { display: flex; align-items: center; gap: .4rem; font-size: .95rem; font-weight: 400; cursor: pointer; }
+.likert-wrap { display: flex; align-items: center; gap: .4rem; }
+.likert-wrap span { font-size: .75rem; color: var(--muted); min-width: 55px; }
+.likert-options { display: flex; gap: .2rem; }
+.likert-options label { display: flex; flex-direction: column; align-items: center; gap: .2rem; cursor: pointer; }
+.likert-options input { transform: scale(1.1); cursor: pointer; }
+.likert-options span { font-size: .7rem; color: var(--muted); }
+.q-textarea { width: 100%; padding: .75rem; font-size: .95rem; border: 2px solid #e5e7eb; border-radius: 8px; font-family: 'Inter', sans-serif; resize: vertical; margin-top: .25rem; }
+.q-submit { background: var(--text); color: white; border: none; padding: 1rem 2.5rem; font-size: 1rem; font-weight: 500; border-radius: 50px; cursor: pointer; font-family: 'Inter', sans-serif; width: 100%; margin-top: 1rem; transition: all .2s; }
+.q-submit:hover { background: #333; }
+
+/* ── RESULTS ── */
+#results-page {
+    display: none;
+    max-width: 1000px; margin: 0 auto;
+    padding: 4rem 2rem; position: relative; z-index: 2;
+}
+#results-page.visible { display: block; }
+.results-header { margin-bottom: 3rem; }
+.results-title { font-size: clamp(2rem, 4vw, 3rem); font-weight: 200; letter-spacing: -.03em; margin-bottom: .75rem; }
+.results-sub { font-size: 1.05rem; color: var(--muted); }
+.results-card {
+    background: white; border-radius: 16px; padding: 2.5rem;
+    margin-bottom: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,.04);
+    border: 1px solid var(--border);
+}
+.results-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text); }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+.metric-block { text-align: center; padding: 1.25rem; background: var(--bg); border-radius: 10px; border: 1px solid var(--border); }
+.metric-block .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem; font-weight: 300; color: var(--text);
+    line-height: 1; margin-bottom: .25rem;
+}
+.metric-block .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.hand-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+.hand-tab { padding: .5rem 1.25rem; border-radius: 50px; cursor: pointer; font-size: .85rem; font-weight: 500; border: 1.5px solid var(--border); background: transparent; transition: all .2s; }
+.hand-tab.active { background: var(--text); color: white; border-color: var(--text); }
+.trial-bars { display: flex; flex-direction: column; gap: .75rem; }
+.trial-bar-row { display: flex; align-items: center; gap: 1rem; }
+.trial-bar-label { font-size: .8rem; color: var(--muted); min-width: 55px; }
+.trial-bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.trial-bar-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--green)); border-radius: 4px; transition: width .6s ease; }
+.trial-bar-val { font-family: 'JetBrains Mono', monospace; font-size: .85rem; color: var(--text); min-width: 60px; text-align: right; }
+.share-btn { background: var(--bg); border: 1.5px solid var(--border); color: var(--text); padding: .8rem 1.75rem; border-radius: 50px; font-size: .9rem; cursor: pointer; font-family: 'Inter', sans-serif; font-weight: 500; transition: all .2s; margin-top: 1rem; display: inline-flex; align-items: center; gap: .5rem; }
+.share-btn:hover { background: var(--text); color: white; border-color: var(--text); }
+.prolific-code-box {
+    background: rgba(34,197,94,.06); border: 2px solid rgba(34,197,94,.3);
+    border-radius: 12px; padding: 1.75rem; text-align: center; margin-bottom: 1.5rem;
+}
+.prolific-code { font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 500; color: var(--green); letter-spacing: .15em; margin: .5rem 0; }
+</style>
+</head>
+<body>
+
+<!-- ── MOBILE BLOCK ── -->
+<div id="mobile-block">
+    <div style="max-width:480px">
+        <div style="font-size:3rem;margin-bottom:1.5rem">🖥️</div>
+        <h2 style="font-size:1.8rem;font-weight:300;margin-bottom:1rem;letter-spacing:-.02em">Desktop Required</h2>
+        <p style="font-size:1rem;color:#666;line-height:1.7;margin-bottom:1.5rem">
+            This assessment uses your webcam to measure hand rotation. It requires a desktop or laptop computer for accurate measurement.
+        </p>
+        <p style="font-size:.9rem;color:#999">Please return to this page on your laptop or desktop computer.</p>
+    </div>
+</div>
+
+<!-- ── WELCOME ── -->
+<div id="welcome-screen">
+    <div class="geo geo-1"></div>
+    <div class="geo geo-2"></div>
+    <div class="welcome-inner" style="position:relative;z-index:1">
+        <div class="welcome-badge">MDS-UPDRS 3.6 · Hand Rotation Assessment</div>
+        <h1 class="welcome-title">Hand Rotation<br>Assessment</h1>
+        <p class="welcome-subtitle">
+            You'll rotate your hand palm-up and palm-down as fast and fully as possible.
+            Your webcam tracks the movement. No video is stored — only movement data.
+        </p>
+
+        <div class="arm-diagram">
+            <div class="arm-diagram-title">Correct Position</div>
+            <svg width="100%" height="120" viewBox="0 0 500 120" xmlns="http://www.w3.org/2000/svg">
+                <!-- Arm extending toward viewer (shown as trapezoid) -->
+                <g transform="translate(60,10)">
+                    <!-- Forearm -->
+                    <path d="M60,55 L160,45 L160,75 L60,65 Z" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1.5" rx="4"/>
+                    <!-- Wrist joint -->
+                    <ellipse cx="160" cy="60" rx="8" ry="12" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1"/>
+                    <!-- Palm (dorsum = palm down) -->
+                    <rect x="168" y="44" width="60" height="32" rx="6" fill="#dde3ef" stroke="#94a3b8" stroke-width="1.5"/>
+                    <!-- Fingers curled, dorsum facing up -->
+                    <rect x="228" y="46" width="22" height="7" rx="3" fill="#c7d2e8" stroke="#94a3b8" stroke-width="1"/>
+                    <rect x="228" y="56" width="22" height="7" rx="3" fill="#c7d2e8" stroke="#94a3b8" stroke-width="1"/>
+                    <rect x="228" y="66" width="22" height="7" rx="3" fill="#c7d2e8" stroke="#94a3b8" stroke-width="1"/>
+                    <!-- Thumb (pointing down-left in pronated position) -->
+                    <ellipse cx="175" cy="76" rx="8" ry="5" fill="#b0bedb" stroke="#94a3b8" stroke-width="1" transform="rotate(-20,175,76)"/>
+                    <!-- Rotation arrows -->
+                    <path d="M320,30 Q370,10 390,60 Q370,110 320,90" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="6,3" marker-end="url(#arr)"/>
+                    <!-- Labels -->
+                    <text x="0" y="65" font-family="Inter,sans-serif" font-size="11" fill="#6b7280">Arm extends</text>
+                    <text x="0" y="78" font-family="Inter,sans-serif" font-size="11" fill="#6b7280">toward camera</text>
+                    <text x="325" y="20" font-family="Inter,sans-serif" font-size="11" fill="#3b82f6">Rotate</text>
+                    <text x="325" y="32" font-family="Inter,sans-serif" font-size="11" fill="#3b82f6">palm ↑↓</text>
+                </g>
+                <defs>
+                    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                        <path d="M0,0 L0,6 L6,3 z" fill="#3b82f6"/>
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+
+        <div class="welcome-steps">
+            <div class="step-card">
+                <div class="step-num">01 — Position</div>
+                <div class="step-text">Sit at a desk. Extend one arm straight out toward the camera, elbow straight but relaxed.</div>
+            </div>
+            <div class="step-card">
+                <div class="step-num">02 — Rotate</div>
+                <div class="step-text">Rotate palm UP then palm DOWN repeatedly, as <strong>fast and fully</strong> as possible.</div>
+            </div>
+            <div class="step-card">
+                <div class="step-num">03 — Both Hands</div>
+                <div class="step-text">Right hand first: 1 practice + 3 scored trials. Then left hand. ~5 minutes total.</div>
+            </div>
+        </div>
+
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:1rem">Make sure your webcam is on and you have good lighting.</p>
+        <button class="btn-primary" id="begin-btn">
+            <span>Begin Assessment</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- ── LOADING ── -->
+<div id="loading-overlay">
+    <div class="loader-ring"></div>
+    <div class="loader-title">Starting camera</div>
+    <div id="loader-status">Initializing hand tracking…</div>
+    <div class="loader-bar-wrap"><div class="loader-bar" id="loader-bar"></div></div>
+    <p style="font-size:.85rem;color:#aaa;max-width:280px;text-align:center">Enable camera access when prompted</p>
+</div>
+
+<!-- ── CALIBRATION ── -->
+<div id="calib-overlay">
+    <div class="calib-phase" id="calib-phase">Calibration — Right Hand</div>
+    <div class="calib-title" id="calib-title">Hold palm DOWN</div>
+    <div class="calib-instruction" id="calib-instr">
+        Extend your arm toward the camera, palm facing <strong>DOWN</strong>.<br>Hold still.
+    </div>
+    <!-- Detection status — tells user what's happening in real time -->
+    <div id="calib-detect-status" style="
+        margin: 1.5rem 0 0.5rem;
+        font-size: 1rem; font-weight: 500;
+        color: rgba(255,255,255,0.45);
+        letter-spacing: 0.02em;
+        min-height: 1.4em;
+    ">Position your hand in view…</div>
+    <!-- Countdown only moves while hand is detected -->
+    <div class="calib-countdown" id="calib-count">3</div>
+    <div class="calib-progress"><div class="calib-progress-bar" id="calib-bar"></div></div>
+    <div class="calib-angle-live" id="calib-angle-live">angle: —</div>
+</div>
+
+<!-- ── BETWEEN-TRIAL OVERLAY ── -->
+<div id="trial-overlay">
+    <div class="trial-ov-label" id="tov-label">Right Hand · Practice</div>
+    <div class="trial-ov-title" id="tov-title">Get Ready</div>
+    <div class="trial-ov-instruction" id="tov-instr">
+        Extend your arm toward the camera, palm down.<br>
+        Rotate as <strong>FAST</strong> and as <strong>FULLY</strong> as possible.
+    </div>
+    <div class="trial-ov-footer" id="tov-footer">Press <strong>SPACE</strong> to begin</div>
+    <div class="rest-bar-wrap" id="rest-bar-wrap" style="display:none">
+        <div class="rest-bar" id="rest-bar"></div>
+    </div>
+</div>
+
+<!-- ── ASSESSMENT PAGE ── -->
+<div id="assessment-page">
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="panel-brand">Aethel · Hand Rotation</div>
+
+            <div class="timer-display" id="timer-disp">10</div>
+            <div class="rots-counter">
+                <div class="rots-num" id="rots-num">0</div>
+                <div class="rots-label">rotations</div>
+            </div>
+
+            <div class="trial-meta">
+                <div class="trial-seq-label" id="trial-seq-label">Right Hand · Trial 1 of 3</div>
+                <div class="hand-label" id="hand-label">Right Hand</div>
+            </div>
+
+            <div class="live-metrics">
+                <div class="metric-row">
+                    <span class="metric-name">Speed</span>
+                    <span class="metric-val" id="live-freq">—</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-name">Angle</span>
+                    <span class="metric-val" id="live-angle">—</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-name">Confidence</span>
+                    <span class="metric-val" id="live-conf">—</span>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="right-panel">
+            <video id="cam" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+
+            <div class="angle-bar-wrap" id="angle-bar-wrap">
+                <div class="angle-bar-track">
+                    <div class="angle-bar-fill" id="angle-bar-fill"></div>
+                </div>
+                <div class="angle-bar-label" id="angle-bar-label">0°</div>
+            </div>
+
+            <div class="center-timer" id="center-timer">10</div>
+            <div class="center-rots" id="center-rots">0 rotations</div>
+            <div class="status-pill" id="status-pill">Position hand in view</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── QUESTIONNAIRE ── -->
+<div id="questionnaire-overlay">
+    <div class="q-inner">
+        <h2 class="q-title">Quick Questions</h2>
+        <p class="q-sub">Please answer before seeing your results</p>
+        <form id="q-form">
+            <div class="q-group">
+                <label>Do you have any known neurological conditions?</label>
+                <div class="q-radio-group">
+                    <label><input type="radio" name="neurological" value="no" required> No</label>
+                    <label><input type="radio" name="neurological" value="yes"> Yes</label>
+                </div>
+            </div>
+            <div class="q-group">
+                <label>Do you have any injury or surgery affecting either hand or wrist?</label>
+                <div class="q-radio-group">
+                    <label><input type="radio" name="wrist_injury" value="no" required> No</label>
+                    <label><input type="radio" name="wrist_injury" value="yes"> Yes</label>
+                </div>
+            </div>
+            <div class="q-group">
+                <label>Which hand do you normally write with?</label>
+                <div class="q-radio-group">
+                    <label><input type="radio" name="handedness" value="right" required> Right</label>
+                    <label><input type="radio" name="handedness" value="left"> Left</label>
+                    <label><input type="radio" name="handedness" value="both"> Both</label>
+                </div>
+            </div>
+            <div class="q-group">
+                <label>Did the rotation counter seem accurate?</label>
+                <div class="q-radio-group">
+                    <label><input type="radio" name="accuracy" value="yes" required> Yes</label>
+                    <label><input type="radio" name="accuracy" value="close"> Close</label>
+                    <label><input type="radio" name="accuracy" value="no"> No</label>
+                </div>
+            </div>
+            <div class="q-group">
+                <label>Current fatigue level</label>
+                <div class="likert-wrap">
+                    <span style="text-align:right">Not tired</span>
+                    <div class="likert-options" id="fatigue-scale"></div>
+                    <span>Very tired</span>
+                </div>
+            </div>
+            <div class="q-group">
+                <label>Task motivation</label>
+                <div class="likert-wrap">
+                    <span style="text-align:right">Low</span>
+                    <div class="likert-options" id="motivation-scale"></div>
+                    <span>High</span>
+                </div>
+            </div>
+            <div class="q-group">
+                <label>Additional feedback <span style="color:var(--muted);font-weight:400">(required, min 10 chars)</span></label>
+                <textarea class="q-textarea" name="feedback" rows="3" placeholder="Any thoughts about the task…" minlength="10" required></textarea>
+            </div>
+            <button type="submit" class="q-submit">Continue to Results →</button>
+        </form>
+    </div>
+</div>
+
+<!-- ── RESULTS ── -->
+<div id="results-page"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   CONSTANTS & CONFIG
+════════════════════════════════════════════════════════════════ */
+const TARGET_FPS       = 25;
+const TARGET_DT        = 1000 / TARGET_FPS; // 40ms
+const MIN_CYCLE_AMP    = 20;   // degrees — minimum valid rotation amplitude
+const MIN_HALF_CYCLE   = 100;  // ms
+const MAX_HALF_CYCLE   = 1000; // ms
+const HESIT_THRESH_PCT = 0.20; // 20% of mean peak velocity
+const HESIT_MIN_DUR    = 100;  // ms
+const CONF_THRESHOLD   = 0.70;
+
+// SG(9) smoothing coefficients for window=9, poly order 3/4
+const SG9_C    = [-21, 14, 39, 54, 59, 54, 39, 14, -21];
+const SG9_NORM = 231.0;
+const SG9_HALF = 4;
+
+/* ════════════════════════════════════════════════════════════════
+   TRIAL SEQUENCE
+════════════════════════════════════════════════════════════════ */
+const TRIAL_SEQ = [
+    // right hand
+    { hand: 'right', isPractice: true,  trialNumber: 0, duration: 5000,  label: 'Practice',     seqLabel: 'Right Hand · Practice'  },
+    { hand: 'right', isPractice: false, trialNumber: 1, duration: 10000, label: 'Trial 1 of 3', seqLabel: 'Right Hand · Trial 1 of 3' },
+    { hand: 'right', isPractice: false, trialNumber: 2, duration: 10000, label: 'Trial 2 of 3', seqLabel: 'Right Hand · Trial 2 of 3' },
+    { hand: 'right', isPractice: false, trialNumber: 3, duration: 10000, label: 'Trial 3 of 3', seqLabel: 'Right Hand · Trial 3 of 3' },
+    // left hand
+    { hand: 'left',  isPractice: true,  trialNumber: 0, duration: 5000,  label: 'Practice',     seqLabel: 'Left Hand · Practice'   },
+    { hand: 'left',  isPractice: false, trialNumber: 4, duration: 10000, label: 'Trial 1 of 3', seqLabel: 'Left Hand · Trial 1 of 3' },
+    { hand: 'left',  isPractice: false, trialNumber: 5, duration: 10000, label: 'Trial 2 of 3', seqLabel: 'Left Hand · Trial 2 of 3' },
+    { hand: 'left',  isPractice: false, trialNumber: 6, duration: 10000, label: 'Trial 3 of 3', seqLabel: 'Left Hand · Trial 3 of 3' },
+];
+
+const REST_AFTER = { practice: 5000, scored: 10000 }; // ms
+
+/* ════════════════════════════════════════════════════════════════
+   GLOBAL STATE
+════════════════════════════════════════════════════════════════ */
+let handsModel, recording = false, calibrating = false;
+let trialIdx = 0;
+let calibData = { right: null, left: null };
+
+// Per-trial buffers (reset each trial)
+let rawAngles = [], rawTimes = [], frameData = [];
+let handConf = [];
+let fpsHistory = [], frameTimestamps = [];
+
+// Live state
+let recordingStart = null, stopTimeout = null, timerInterval = null;
+let liveRotCount = 0, liveDirection = 0, livePeak = null;
+const LIVE_MIN_EXCURSION = 45; // degrees from peak/trough — ~90% of functional 50° per-direction range
+let handLostTime = null;
+const MAX_HAND_LOSS = 3000;
+
+// All saved results
+let allTrialResults = [];
+
+// Calibration state
+let calibPhase = 'pronation', calibAngles = [], calibTimer = null, calibStart = null;
+let calibPhaseDuration = { pronation: 3000, supination: 2000 };
+
+/* ════════════════════════════════════════════════════════════════
+   CORE MATH
+════════════════════════════════════════════════════════════════ */
+
+function computeRotationAngle(lm) {
+    // Use world landmarks if available (passed as is); else normalized
+    const W  = lm[0];  // wrist
+    const T  = lm[4];  // thumb tip
+    const M9 = lm[9];  // middle MCP
+
+    // Forearm axis unit vector: wrist → middle MCP
+    const fx = M9.x - W.x, fy = M9.y - W.y, fz = (M9.z||0) - (W.z||0);
+    const fLen = Math.sqrt(fx*fx + fy*fy + fz*fz);
+    if (fLen < 1e-6) return null;
+    const ux = fx/fLen, uy = fy/fLen, uz = fz/fLen;
+
+    // Thumb vector: wrist → thumb tip
+    const tx = T.x - W.x, ty = T.y - W.y, tz = (T.z||0) - (W.z||0);
+
+    // Project thumb onto plane perpendicular to forearm axis
+    const dot = tx*ux + ty*uy + tz*uz;
+    const px = tx - dot*ux, py = ty - dot*uy, pz = tz - dot*uz;
+    const pLen = Math.sqrt(px*px + py*py + pz*pz);
+    if (pLen < 1e-6) return null;
+
+    // Reference direction: world-up = (0,-1,0) projected into perp plane
+    // (y increases downward in image space, -y = screen up)
+    const rDot = -uy; // dot(0,-1,0) · u = -uy
+    const rx2 = -rDot*ux, ry2 = -1 - rDot*uy, rz2 = -rDot*uz;
+    const rLen = Math.sqrt(rx2*rx2 + ry2*ry2 + rz2*rz2);
+
+    let e1x, e1y, e1z;
+    if (rLen < 0.05) {
+        // Forearm nearly vertical: use (1,0,0) instead
+        const rx3 = 1 - ux*ux, ry3 = -ux*uy, rz3 = -ux*uz;
+        const rLen3 = Math.sqrt(rx3*rx3 + ry3*ry3 + rz3*rz3);
+        e1x = rx3/rLen3; e1y = ry3/rLen3; e1z = rz3/rLen3;
+    } else {
+        e1x = rx2/rLen; e1y = ry2/rLen; e1z = rz2/rLen;
+    }
+
+    // e2 = u × e1
+    const e2x = uy*e1z - uz*e1y;
+    const e2y = uz*e1x - ux*e1z;
+    const e2z = ux*e1y - uy*e1x;
+
+    // Signed angle in perpendicular plane
+    const a = px*e1x + py*e1y + pz*e1z;
+    const b = px*e2x + py*e2y + pz*e2z;
+
+    return Math.atan2(b, a) * (180 / Math.PI);
+}
+
+// Savitzky-Golay smoothing, window=9, polynomial order 3
+function savitzkyGolay9(data) {
+    const result = new Array(data.length);
+    for (let i = 0; i < data.length; i++) {
+        if (i < SG9_HALF || i >= data.length - SG9_HALF) {
+            result[i] = data[i]; // edge: no smoothing
+            continue;
+        }
+        let sum = 0;
+        for (let j = 0; j < 9; j++) sum += SG9_C[j] * data[i - SG9_HALF + j];
+        result[i] = sum / SG9_NORM;
+    }
+    return result;
+}
+
+// Resample signal to 25 Hz via linear interpolation
+function resampleTo25Hz(values, timestamps) {
+    if (timestamps.length < 2) return { values: [...values], times: [...timestamps] };
+    const t0 = timestamps[0], tEnd = timestamps[timestamps.length - 1];
+    const outT = [], outV = [];
+    for (let t = t0; t <= tEnd + 1; t += TARGET_DT) {
+        // Binary search
+        let lo = 0, hi = timestamps.length - 1;
+        while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (timestamps[mid] <= t) lo = mid; else hi = mid;
+        }
+        if (hi >= timestamps.length) { outV.push(values[timestamps.length-1]); }
+        else {
+            const dt = timestamps[hi] - timestamps[lo];
+            const alpha = dt < 1e-6 ? 0 : (t - timestamps[lo]) / dt;
+            outV.push(values[lo] + alpha * (values[hi] - values[lo]));
+        }
+        outT.push(t - t0);
+    }
+    return { values: outV, times: outT };
+}
+
+// Unwrap angles to avoid ±180 discontinuities
+function unwrapAngles(angles) {
+    if (angles.length === 0) return [];
+    const out = [angles[0]];
+    for (let i = 1; i < angles.length; i++) {
+        let diff = angles[i] - out[i-1];
+        while (diff >  180) diff -= 360;
+        while (diff < -180) diff += 360;
+        out.push(out[i-1] + diff);
+    }
+    return out;
+}
+
+// Compute angular velocity (deg/s) from angle + times_ms
+function computeAngularVelocity(angles, times_ms) {
+    const vel = [0];
+    for (let i = 1; i < angles.length; i++) {
+        const dt = (times_ms[i] - times_ms[i-1]) / 1000;
+        vel.push(dt > 1e-6 ? (angles[i] - angles[i-1]) / dt : 0);
+    }
+    return vel;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FEATURE COMPUTATION
+════════════════════════════════════════════════════════════════ */
+
+function detectCycles(smoothAngles, times_ms) {
+    if (smoothAngles.length < 10) return { fullCycles: 0, halfCycles: 0, cycleData: [], ipiMs: [] };
+
+    // Find local extrema
+    const extrema = [];
+    for (let i = 1; i < smoothAngles.length - 1; i++) {
+        const prev = smoothAngles[i-1], curr = smoothAngles[i], next = smoothAngles[i+1];
+        if (curr > prev && curr > next) extrema.push({ idx: i, t: times_ms[i], v: curr, type: 'max' });
+        else if (curr < prev && curr < next) extrema.push({ idx: i, t: times_ms[i], v: curr, type: 'min' });
+    }
+
+    // Merge consecutive same-type extrema (keep most extreme)
+    const merged = [];
+    for (const e of extrema) {
+        const last = merged[merged.length - 1];
+        if (!last || last.type !== e.type) { merged.push({...e}); }
+        else if ((e.type === 'max' && e.v > last.v) || (e.type === 'min' && e.v < last.v)) {
+            merged[merged.length - 1] = {...e};
+        }
+    }
+
+    let validHalf = 0;
+    const cycleData = [], ipiMs = [];
+    const fullCycleTimes = [];
+
+    for (let i = 0; i < merged.length - 1; i++) {
+        const e1 = merged[i], e2 = merged[i+1];
+        const amp = Math.abs(e2.v - e1.v);
+        const dur = e2.t - e1.t;
+        if (amp >= MIN_CYCLE_AMP && dur >= MIN_HALF_CYCLE && dur <= MAX_HALF_CYCLE) {
+            validHalf++;
+            cycleData.push({ startT: e1.t, endT: e2.t, amp, dur });
+            // Full cycle = 2 half-cycles of same starting type
+            if (e1.type === 'max' && i + 2 < merged.length) {
+                const e3 = merged[i+2];
+                const dur2 = e3.t - e1.t;
+                const amp2 = Math.abs(e3.v - e2.v);
+                if (amp2 >= MIN_CYCLE_AMP && (e3.t - e2.t) >= MIN_HALF_CYCLE && (e3.t - e2.t) <= MAX_HALF_CYCLE) {
+                    fullCycleTimes.push(dur2);
+                    ipiMs.push(dur2);
+                }
+            }
+        }
+    }
+
+    return { fullCycles: Math.floor(validHalf / 2), halfCycles: validHalf, cycleData, ipiMs, fullCycleTimes };
+}
+
+function computeHesitations(smoothAngles, times_ms, absVel) {
+    if (absVel.length < 3) return 0;
+    const meanPeak = absVel.reduce((a,b) => a + b, 0) / absVel.length;
+    const thresh = meanPeak * HESIT_THRESH_PCT;
+    let count = 0, inHesit = false, hesitStart = null;
+
+    for (let i = 0; i < absVel.length; i++) {
+        if (absVel[i] < thresh) {
+            if (!inHesit) { inHesit = true; hesitStart = times_ms[i]; }
+            else if ((times_ms[i] - hesitStart) >= HESIT_MIN_DUR) { count++; inHesit = false; }
+        } else { inHesit = false; }
+    }
+    return count;
+}
+
+function computeDimJerk(angles_deg, times_ms) {
+    if (angles_deg.length < 6) return null;
+    const t_s = times_ms.map(t => t / 1000);
+    const dt = [];
+    for (let i = 1; i < t_s.length; i++) {
+        dt.push(Math.max(t_s[i] - t_s[i-1], 1e-6));
+    }
+    const angles_rad = angles_deg.map(a => a * Math.PI / 180);
+    const vel  = [], acc  = [], jerk = [];
+    for (let i = 0; i < dt.length; i++) vel.push((angles_rad[i+1] - angles_rad[i]) / dt[i]);
+    for (let i = 0; i < dt.length - 1; i++) acc.push((vel[i+1] - vel[i]) / dt[i+1]);
+    for (let i = 0; i < dt.length - 2; i++) jerk.push((acc[i+1] - acc[i]) / dt[i+2]);
+
+    const duration  = t_s[t_s.length-1] - t_s[0];
+    const amplitude = (Math.max(...angles_rad) - Math.min(...angles_rad)) * (Math.PI / 180);
+    if (duration <= 0 || amplitude <= 0 || jerk.length === 0) return null;
+
+    const msj = jerk.reduce((s,j) => s + j*j, 0) / jerk.length;
+    const dj  = msj * Math.pow(duration, 5) / (amplitude * amplitude);
+    return dj > 0 ? -Math.log(dj) : null;
+}
+
+function computeTrialFeatures(rawAngArr, rawTimeArr, calibHandData) {
+    if (rawAngArr.length < 20) return null;
+
+    // 1. Unwrap raw angles (handle ±180 wrap-around)
+    const unwrapped = unwrapAngles(rawAngArr);
+
+    // 2. Savitzky-Golay smoothing
+    const smoothed = savitzkyGolay9(unwrapped);
+
+    // 3. Resample to 25 Hz
+    const { values: resampValues, times: resampTimes } = resampleTo25Hz(smoothed, rawTimeArr);
+
+    // 4. Angular velocity from resampled signal
+    const vel = computeAngularVelocity(resampValues, resampTimes);
+    const absVel = vel.map(Math.abs);
+    const peakVelocity = Math.max(...absVel);
+
+    // 5. Cycle detection
+    const { fullCycles, halfCycles, cycleData, ipiMs } = detectCycles(resampValues, resampTimes);
+    const trialDuration_s = (resampTimes[resampTimes.length-1] - resampTimes[0]) / 1000;
+    const rotationFrequency = trialDuration_s > 0 ? fullCycles / trialDuration_s : 0;
+
+    // 6. Mean amplitude (peak-to-trough per cycle)
+    const amps = cycleData.map(c => c.amp);
+    const meanAmplitude = amps.length > 0 ? amps.reduce((a,b)=>a+b,0) / amps.length : 0;
+
+    // 7. Amplitude decrement (first third vs last third)
+    let amplitudeDecrement = null;
+    if (amps.length >= 3) {
+        const third = Math.floor(amps.length / 3);
+        const firstAmp = amps.slice(0, third).reduce((a,b)=>a+b,0) / third;
+        const lastAmp  = amps.slice(-third).reduce((a,b)=>a+b,0) / third;
+        amplitudeDecrement = firstAmp > 0 ? (firstAmp - lastAmp) / firstAmp * 100 : null;
+    }
+
+    // 8. Rhythm CV
+    let rhythmCV = null;
+    if (ipiMs.length >= 2) {
+        const mean = ipiMs.reduce((a,b)=>a+b,0) / ipiMs.length;
+        const variance = ipiMs.reduce((a,b) => a + (b-mean)**2, 0) / ipiMs.length;
+        rhythmCV = mean > 0 ? (Math.sqrt(variance) / mean) * 100 : null;
+    }
+
+    // 9. Hesitations
+    const hesitationCount = computeHesitations(resampValues, resampTimes, absVel);
+
+    // 10. Dimensionless jerk
+    const dimJerk = computeDimJerk(resampValues, resampTimes);
+
+    // 11. QC flags
+    const avgFPS = fpsHistory.length > 0
+        ? fpsHistory.reduce((a,b)=>a+b,0) / fpsHistory.length : 0;
+    const framesRecorded = rawAngArr.length;
+    const lowConfFrames = handConf.filter(c => c < CONF_THRESHOLD).length;
+    const lowConfidencePct = framesRecorded > 0 ? lowConfFrames / framesRecorded * 100 : 0;
+
+    const qcFlags = {
+        tooFewCycles:        fullCycles < 8,
+        highLowConf:         lowConfidencePct > 40,
+        freqOutOfRange:      rotationFrequency < 0.5 || (rotationFrequency > 8 && fullCycles > 0),
+        highAmpDecrement:    amplitudeDecrement !== null && amplitudeDecrement > 60,
+    };
+
+    return {
+        rotationFrequency: +rotationFrequency.toFixed(3),
+        meanAmplitude:     +meanAmplitude.toFixed(2),
+        peakVelocity:      +peakVelocity.toFixed(2),
+        rhythmCV:          rhythmCV !== null ? +rhythmCV.toFixed(2) : null,
+        amplitudeDecrement:amplitudeDecrement !== null ? +amplitudeDecrement.toFixed(2) : null,
+        hesitationCount,
+        dimJerk:           dimJerk !== null ? +dimJerk.toFixed(4) : null,
+        avgFPS:            +avgFPS.toFixed(1),
+        framesRecorded,
+        lowConfidencePct:  +lowConfidencePct.toFixed(1),
+        qcFlags,
+        calibration:       calibHandData,
+        smoothedAngles:    smoothed,
+        resampledAngles:   resampValues,
+        resampledTimes:    resampTimes,
+        angularVelocity:   vel,
+    };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FPS TRACKING
+════════════════════════════════════════════════════════════════ */
+let lastFpsCalcTime = 0;
+
+function trackFPS() {
+    const now = performance.now();
+    frameTimestamps.push(now);
+    if (frameTimestamps.length > 90) frameTimestamps.shift();
+    if (now - lastFpsCalcTime > 1000 && frameTimestamps.length > 10) {
+        const span = frameTimestamps[frameTimestamps.length-1] - frameTimestamps[0];
+        const fps = ((frameTimestamps.length - 1) / span) * 1000;
+        fpsHistory.push(fps);
+        if (fpsHistory.length > 100) fpsHistory.shift();
+        lastFpsCalcTime = now;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MEDIAPIPE HAND SKELETON DRAWING
+════════════════════════════════════════════════════════════════ */
+const CONNECTIONS = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [5,9],[9,10],[10,11],[11,12],
+    [9,13],[13,14],[14,15],[15,16],
+    [13,17],[17,18],[18,19],[19,20],
+    [0,17]
+];
+
+function drawSkeleton(ctx, lm, w, h, conf, isCorrect) {
+    const color = conf >= CONF_THRESHOLD ? (isCorrect ? '#22c55e' : '#f59e0b') : '#ef4444';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.7;
+
+    for (const [a, b] of CONNECTIONS) {
+        ctx.beginPath();
+        ctx.moveTo(lm[a].x * w, lm[a].y * h);
+        ctx.lineTo(lm[b].x * w, lm[b].y * h);
+        ctx.stroke();
+    }
+
+    // Highlight key landmarks
+    const keyLandmarks = [0, 4, 9, 12];
+    for (const idx of keyLandmarks) {
+        ctx.beginPath();
+        ctx.arc(lm[idx].x * w, lm[idx].y * h, idx === 0 ? 6 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = idx === 0 ? '#ffffff' : color;
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawRotationArc(ctx, lm, w, h, angle, calibHandData) {
+    if (angle === null) return;
+
+    const wx = lm[0].x * w, wy = lm[0].y * h;
+    const radius = 40;
+
+    // Compute normalized angle 0-1 between pron and sup
+    let normalizedAngle = 0.5;
+    if (calibHandData && calibHandData.range > 10) {
+        normalizedAngle = (angle - calibHandData.pronAngle) / calibHandData.range;
+        normalizedAngle = Math.max(0, Math.min(1, normalizedAngle));
+    }
+
+    // Draw arc gauge
+    const startAngle = -Math.PI * 0.85;
+    const endAngle   =  Math.PI * 0.85;
+    const sweepAngle = startAngle + (endAngle - startAngle) * normalizedAngle;
+
+    // Background arc
+    ctx.beginPath();
+    ctx.arc(wx, wy - 15, radius, startAngle, endAngle);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // Filled arc
+    const hue = Math.round(normalizedAngle * 120); // 0=red, 120=green
+    ctx.beginPath();
+    ctx.arc(wx, wy - 15, radius, startAngle, sweepAngle);
+    ctx.strokeStyle = `hsl(${hue},85%,55%)`;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    // Angle text
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '12px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(angle)}°`, wx, wy + 30);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MEDIAPIPE INIT + ON RESULTS
+════════════════════════════════════════════════════════════════ */
+function initMediaPipe() {
+    handsModel = new Hands({
+        locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    handsModel.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+    });
+    handsModel.onResults(onHandsResults);
+}
+
+function onHandsResults(results) {
+    trackFPS();
+
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('cam');
+    canvas.width  = video.videoWidth  || canvas.offsetWidth;
+    canvas.height = video.videoHeight || canvas.offsetHeight;
+    const W = canvas.width, H = canvas.height;
+
+    ctx.clearRect(0, 0, W, H);
+
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        // No hand detected
+        if (calibrating) {
+            _calibHandOk = false;
+            const statusEl = document.getElementById('calib-detect-status');
+            if (statusEl) {
+                statusEl.textContent = 'Position your hand in view…';
+                statusEl.style.color = 'rgba(255,255,255,0.4)';
+            }
+        }
+        updateStatusPill('Position hand in view', '');
+        document.getElementById('live-conf').textContent = '—';
+        if (recording && handLostTime === null) handLostTime = Date.now();
+        if (recording && handLostTime && (Date.now() - handLostTime) > MAX_HAND_LOSS) {
+            handleHandLost();
+        }
+        return;
+    }
+    handLostTime = null;
+
+    const lm   = results.multiHandLandmarks[0];
+    const conf = results.multiHandedness[0].score;
+
+    // Determine which hand MediaPipe sees vs which hand is required
+    // Video is mirrored → MediaPipe "Left" = participant's right
+    const mpLabel = results.multiHandedness[0].label; // "Left" or "Right"
+    const detectedHand = mpLabel === 'Left' ? 'right' : 'left'; // corrected for mirror
+    const trial = TRIAL_SEQ[trialIdx];
+    const requiredHand = trial ? trial.hand : 'right';
+    const isCorrectHand = detectedHand === requiredHand;
+
+    // Try world landmarks for better angle accuracy
+    const lmForAngle = (results.multiHandWorldLandmarks && results.multiHandWorldLandmarks.length > 0)
+        ? results.multiHandWorldLandmarks[0]
+        : lm;
+
+    const angle = computeRotationAngle(lmForAngle);
+
+    // Update live displays
+    const angleStr = angle !== null ? `${Math.round(angle)}°` : '—';
+    document.getElementById('live-angle').textContent = angleStr;
+    document.getElementById('live-conf').textContent = `${Math.round(conf * 100)}%`;
+
+    // Draw skeleton + arc
+    drawSkeleton(ctx, lm, W, H, conf, isCorrectHand);
+    if (angle !== null) drawRotationArc(ctx, lm, W, H, angle, calibData[requiredHand]);
+
+    // Hand ready?
+    const keyInFrame = lm[0].x > 0.04 && lm[0].x < 0.96
+                    && lm[0].y > 0.04 && lm[0].y < 0.96;
+    const handReady = conf >= CONF_THRESHOLD && isCorrectHand && keyInFrame && angle !== null;
+
+    // Status feedback
+    if (!isCorrectHand) {
+        const needed = requiredHand === 'right' ? 'RIGHT' : 'LEFT';
+        updateStatusPill(`Use your ${needed} hand`, 'err');
+    } else if (!keyInFrame) {
+        updateStatusPill('Move hand fully into view', 'warn');
+    } else if (conf < CONF_THRESHOLD) {
+        updateStatusPill('Improve lighting / keep hand visible', 'warn');
+    } else {
+        updateStatusPill(recording ? '' : 'Hand detected — ready', 'ok');
+    }
+
+    // ── CALIBRATION ──
+    // _calibHandOk tells the timer whether to accumulate time.
+    // We set it here on every MediaPipe frame.
+    if (calibrating) {
+        const statusEl = document.getElementById('calib-detect-status');
+        const angleEl  = document.getElementById('calib-angle-live');
+
+        if (angle !== null && conf >= CONF_THRESHOLD && isCorrectHand) {
+            // All good — collect angle and let the timer run
+            _calibHandOk = true;
+            calibAngles.push(angle);
+            angleEl.textContent  = `angle: ${Math.round(angle)}°`;
+            statusEl.textContent = 'Hand detected — hold still';
+            statusEl.style.color = 'rgba(34,197,94,0.9)';
+        } else {
+            // Something wrong — pause the timer
+            _calibHandOk = false;
+            if (!isCorrectHand && angle !== null) {
+                const needed = TRIAL_SEQ[trialIdx]?.hand ?? 'right';
+                statusEl.textContent = `Wrong hand — show your ${needed.toUpperCase()} hand`;
+                statusEl.style.color = 'rgba(239,68,68,0.9)';
+            } else if (conf < CONF_THRESHOLD && angle !== null) {
+                statusEl.textContent = 'Hand detected — improve lighting or move closer';
+                statusEl.style.color = 'rgba(245,158,11,0.9)';
+                angleEl.textContent  = `angle: ${Math.round(angle)}° (low confidence)`;
+            } else {
+                statusEl.textContent = 'Position your hand in view…';
+                statusEl.style.color = 'rgba(255,255,255,0.4)';
+                angleEl.textContent  = 'angle: —';
+            }
+        }
+        return;
+    }
+
+    // ── RECORDING ──
+    if (recording && angle !== null && handReady) {
+        const t = Date.now() - recordingStart;
+
+        rawAngles.push(angle);
+        rawTimes.push(t);
+        handConf.push(conf);
+        frameData.push({
+            timestamp: t,
+            rawAngle:  angle,
+            conf,
+            wrist:     { x: lm[0].x, y: lm[0].y, z: lm[0].z || 0 },
+            thumbTip:  { x: lm[4].x, y: lm[4].y, z: lm[4].z || 0 },
+            middleMCP: { x: lm[9].x, y: lm[9].y, z: lm[9].z || 0 },
+            middleTip: { x: lm[12].x, y: lm[12].y, z: lm[12].z || 0 },
+        });
+
+        updateLiveRotCount(angle);
+    }
+}
+
+/* Live rotation count — peak-tracking algorithm.
+   Tracks the running peak/trough in the current direction. A reversal is only
+   counted once the signal has moved ≥25° away from that extreme. Holding still
+   never accumulates counts regardless of noise. */
+function updateLiveRotCount(angle) {
+    if (livePeak === null) { livePeak = angle; return; }
+
+    if (liveDirection === 0) {
+        // Establish initial direction after first clear movement
+        if (angle - livePeak > 5)      { liveDirection =  1; livePeak = angle; }
+        else if (livePeak - angle > 5) { liveDirection = -1; livePeak = angle; }
+        return;
+    }
+
+    if (liveDirection === 1) {
+        if (angle > livePeak) livePeak = angle; // track new high
+        if (livePeak - angle >= LIVE_MIN_EXCURSION) {
+            liveRotCount++;
+            liveDirection = -1;
+            livePeak = angle;
+        }
+    } else {
+        if (angle < livePeak) livePeak = angle; // track new low
+        if (angle - livePeak >= LIVE_MIN_EXCURSION) {
+            liveRotCount++;
+            liveDirection = 1;
+            livePeak = angle;
+        }
+    }
+
+    const fullRots = Math.floor(liveRotCount / 2);
+    document.getElementById('rots-num').textContent = fullRots;
+    document.getElementById('center-rots').textContent = `${fullRots} rotation${fullRots !== 1 ? 's' : ''}`;
+
+    if (rawTimes.length > 10) {
+        const elapsed_s = rawTimes[rawTimes.length-1] / 1000;
+        if (elapsed_s > 0) {
+            const freq = (fullRots / elapsed_s).toFixed(1);
+            document.getElementById('live-freq').textContent = `${freq} Hz`;
+        }
+    }
+}
+
+function updateStatusPill(text, type) {
+    const pill = document.getElementById('status-pill');
+    if (recording && text === 'Hand detected — ready') { pill.style.display = 'none'; return; }
+    pill.style.display = '';
+    pill.textContent = text;
+    pill.className = `status-pill${type ? ' ' + type : ''}`;
+}
+
+function handleHandLost() {
+    if (!recording) return;
+    stopRecordingEarly('hand_lost');
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CAMERA
+════════════════════════════════════════════════════════════════ */
+function initCamera() {
+    const video  = document.getElementById('cam');
+    const canvas = document.getElementById('overlay');
+
+    setLoaderProgress(20, 'Requesting camera…');
+
+    navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user', frameRate: { ideal: 30 } }
+    }).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }))
+    .then(stream => {
+        video.srcObject = stream;
+        setLoaderProgress(50, 'Loading hand tracking…');
+
+        video.onloadedmetadata = () => {
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            setLoaderProgress(75, 'Starting MediaPipe…');
+            initMediaPipe();
+            setLoaderProgress(90, 'Almost ready…');
+
+            let lastFrame = Date.now();
+            const processFrame = async () => {
+                if (video.readyState >= 2 && !video.paused) {
+                    try { await handsModel.send({ image: video }); lastFrame = Date.now(); }
+                    catch (e) { /* ignore single frame errors */ }
+                }
+                requestAnimationFrame(processFrame);
+            };
+            requestAnimationFrame(processFrame);
+
+            // Watchdog: restart MediaPipe if frozen
+            setInterval(() => {
+                if (Date.now() - lastFrame > 3000) {
+                    try { handsModel.close(); initMediaPipe(); } catch(e) {}
+                }
+            }, 3000);
+
+            setTimeout(() => {
+                setLoaderProgress(100, 'Ready!');
+                setTimeout(() => {
+                    document.getElementById('loading-overlay').classList.remove('visible');
+                    startCalibration();
+                }, 500);
+            }, 1200);
+        };
+    }).catch(err => {
+        console.error('Camera error:', err);
+        document.getElementById('loader-status').textContent = 'Camera access denied. Please refresh and allow camera access.';
+    });
+}
+
+function setLoaderProgress(pct, msg) {
+    document.getElementById('loader-bar').style.width = pct + '%';
+    document.getElementById('loader-status').textContent = msg;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CALIBRATION
+════════════════════════════════════════════════════════════════ */
+let _calibTimer     = null;
+let _calibAccMs     = 0;   // accumulated ms with hand confirmed in frame
+let _calibLastTick  = null;
+let _calibHandOk    = false;
+let _calibDurationMs = 0;
+
+function startCalibration() {
+    const hand = TRIAL_SEQ[trialIdx] ? TRIAL_SEQ[trialIdx].hand : 'right';
+    calibPhase  = 'pronation';
+    calibAngles = [];
+    calibStart  = Date.now();
+    calibrating = true;
+
+    _calibAccMs    = 0;
+    _calibLastTick = null;
+    _calibHandOk   = false;
+    _calibDurationMs = calibPhaseDuration.pronation;
+
+    // Keep assessment page visible so live video always shows.
+    document.getElementById('assessment-page').classList.add('visible');
+    document.getElementById('trial-overlay').classList.remove('visible');
+
+    const overlay = document.getElementById('calib-overlay');
+    document.getElementById('calib-phase').textContent   = `Calibration — ${hand.charAt(0).toUpperCase() + hand.slice(1)} Hand`;
+    document.getElementById('calib-title').textContent   = 'Hold palm DOWN';
+    document.getElementById('calib-instr').innerHTML     = `Extend your <strong>${hand.toUpperCase()}</strong> arm toward the camera, palm facing <strong>DOWN</strong>. Hold still.`;
+    document.getElementById('calib-count').textContent   = Math.ceil(calibPhaseDuration.pronation / 1000);
+    document.getElementById('calib-bar').style.width     = '0%';
+    document.getElementById('calib-bar').style.transition = 'none';
+    document.getElementById('calib-angle-live').textContent = 'angle: —';
+    document.getElementById('calib-detect-status').textContent = 'Position your hand in view…';
+    document.getElementById('calib-detect-status').style.color = 'rgba(255,255,255,0.4)';
+    overlay.classList.add('visible');
+
+    _startCalibTimer();
+}
+
+function _startCalibTimer() {
+    if (_calibTimer) { clearInterval(_calibTimer); _calibTimer = null; }
+
+    _calibTimer = setInterval(() => {
+        const now = Date.now();
+
+        if (_calibHandOk) {
+            // Accumulate time only while hand is confirmed present
+            if (_calibLastTick !== null) {
+                _calibAccMs += now - _calibLastTick;
+            }
+            _calibLastTick = now;
+        } else {
+            // Hand not in view — pause, reset tick reference
+            _calibLastTick = null;
+        }
+
+        const remaining = Math.max(0, _calibDurationMs - _calibAccMs);
+        const pct       = Math.min(_calibAccMs / _calibDurationMs * 100, 100);
+
+        // Update countdown number
+        document.getElementById('calib-count').textContent = Math.ceil(remaining / 1000) || 1;
+
+        // Update progress bar directly (no CSS transition — we control it frame by frame)
+        const bar = document.getElementById('calib-bar');
+        bar.style.transition = 'none';
+        bar.style.width = pct.toFixed(1) + '%';
+
+        if (_calibAccMs >= _calibDurationMs) {
+            clearInterval(_calibTimer);
+            _calibTimer = null;
+            advanceCalibrationPhase();
+        }
+    }, 50);
+}
+
+function advanceCalibrationPhase() {
+    if (calibPhase === 'pronation') {
+        const pronAngle = calibAngles.length > 0 ? median(calibAngles) : 0;
+        calibAngles = [];
+        calibPhase   = 'supination';
+        calibStart   = Date.now();
+
+        _calibAccMs     = 0;
+        _calibLastTick  = null;
+        _calibHandOk    = false;
+        _calibDurationMs = calibPhaseDuration.supination;
+
+        if (!calibData[currentHand()]) calibData[currentHand()] = {};
+        calibData[currentHand()]._tmpPron = pronAngle;
+
+        document.getElementById('calib-title').textContent = 'Now rotate palm UP';
+        document.getElementById('calib-instr').innerHTML   = 'Keep arm extended. Rotate your palm to face <strong>UP</strong>. Hold still when ready.';
+        document.getElementById('calib-bar').style.width   = '0%';
+        document.getElementById('calib-detect-status').textContent = 'Rotate your palm now…';
+        document.getElementById('calib-detect-status').style.color = 'rgba(255,255,255,0.7)';
+
+        // 3-second gap so participant can react before supination timer starts
+        let gapCount = 3;
+        document.getElementById('calib-count').textContent = gapCount;
+        const _gapInterval = setInterval(() => {
+            gapCount--;
+            if (gapCount <= 0) {
+                clearInterval(_gapInterval);
+                document.getElementById('calib-detect-status').textContent = 'Position your hand in view…';
+                document.getElementById('calib-detect-status').style.color = 'rgba(255,255,255,0.4)';
+                _startCalibTimer();
+            } else {
+                document.getElementById('calib-count').textContent = gapCount;
+            }
+        }, 1000);
+    } else {
+        const supAngle  = calibAngles.length > 0 ? median(calibAngles) : 90;
+        const pronAngle = calibData[currentHand()]._tmpPron || 0;
+
+        calibData[currentHand()] = {
+            pronAngle,
+            supAngle,
+            range: Math.abs(supAngle - pronAngle),
+        };
+
+        console.log(`Calibration (${currentHand()}): pron=${pronAngle.toFixed(1)}° sup=${supAngle.toFixed(1)}° range=${calibData[currentHand()].range.toFixed(1)}°`);
+
+        calibrating = false;
+        document.getElementById('calib-overlay').classList.remove('visible');
+        showPreTrialOverlay(false);
+    }
+}
+
+function currentHand() {
+    return TRIAL_SEQ[trialIdx] ? TRIAL_SEQ[trialIdx].hand : 'right';
+}
+
+function median(arr) {
+    if (arr.length === 0) return 0;
+    const s = [...arr].sort((a,b) => a-b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[mid-1] + s[mid]) / 2 : s[mid];
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TRIAL MANAGEMENT
+════════════════════════════════════════════════════════════════ */
+function showPreTrialOverlay(isRest, restDuration) {
+    const trial = TRIAL_SEQ[trialIdx];
+    if (!trial) { showQuestionnaire(); return; }
+
+    const ov = document.getElementById('trial-overlay');
+    document.getElementById('assessment-page').classList.remove('visible');
+    ov.classList.add('visible');
+
+    document.getElementById('tov-label').textContent = trial.seqLabel;
+    document.getElementById('rest-bar-wrap').style.display = 'none';
+    document.getElementById('tov-footer').style.display = '';
+
+    if (isRest) {
+        document.getElementById('tov-title').textContent   = 'Rest';
+        document.getElementById('tov-instr').innerHTML     = `Take a break. Next: <strong>${trial.label}</strong>.`;
+        document.getElementById('tov-footer').style.display = 'none';
+        document.getElementById('rest-bar-wrap').style.display = '';
+
+        const bar = document.getElementById('rest-bar');
+        bar.style.transition = 'none'; bar.style.width = '100%';
+        setTimeout(() => {
+            bar.style.transition = `width ${restDuration}ms linear`;
+            bar.style.width = '0%';
+        }, 50);
+
+        setTimeout(() => showPreTrialOverlay(false), restDuration);
+        return;
+    }
+
+    if (trial.isPractice) {
+        document.getElementById('tov-title').textContent = 'Practice Round';
+        document.getElementById('tov-instr').innerHTML   = `${trial.hand === 'right' ? 'Right' : 'Left'} hand · 5 seconds · <em>Not scored</em><br>Extend arm toward camera, palm down. Rotate as <strong>FAST</strong> and <strong>FULLY</strong> as possible.`;
+    } else {
+        document.getElementById('tov-title').textContent = trial.label;
+        document.getElementById('tov-instr').innerHTML   = `${trial.hand === 'right' ? 'Right' : 'Left'} hand · 10 seconds<br>Extend arm toward camera, palm down. Rotate as <strong>FAST</strong> and <strong>FULLY</strong> as possible.`;
+    }
+
+    // Check if this is a hand switch
+    if (trialIdx === 4) {
+        document.getElementById('tov-title').textContent = 'Switch to Left Hand';
+        document.getElementById('tov-instr').innerHTML   = 'Great work! Now switch to your <strong>LEFT</strong> hand.<br>Same motion — arm extended toward camera.';
+    }
+
+    document.getElementById('tov-footer').textContent = 'Press SPACE to begin';
+    window._spaceReady = true;
+}
+
+function beginTrial() {
+    if (!window._spaceReady) return;
+    window._spaceReady = false;
+
+    document.getElementById('trial-overlay').classList.remove('visible');
+    document.getElementById('assessment-page').classList.add('visible');
+
+    const trial = TRIAL_SEQ[trialIdx];
+    document.getElementById('trial-seq-label').textContent = trial.seqLabel;
+    document.getElementById('hand-label').textContent = trial.hand === 'right' ? 'Right Hand' : 'Left Hand';
+
+    // Reset buffers
+    rawAngles = []; rawTimes = []; frameData = []; handConf = [];
+    fpsHistory = []; frameTimestamps = [];
+    liveRotCount = 0; liveDirection = 0; livePeak = null;
+    handLostTime = null;
+
+    document.getElementById('rots-num').textContent     = '0';
+    document.getElementById('center-rots').textContent  = '0 rotations';
+    document.getElementById('live-freq').textContent    = '—';
+    document.getElementById('status-pill').style.display = '';
+    document.getElementById('angle-bar-wrap').style.display = 'block';
+
+    const timerSec = trial.duration / 1000;
+    document.getElementById('timer-disp').textContent    = timerSec;
+    document.getElementById('center-timer').textContent  = timerSec;
+    document.getElementById('center-timer').style.display = 'block';
+    document.getElementById('center-rots').style.display  = 'block';
+
+    // 3-2-1 countdown then start
+    runCountdown(3, () => {
+        recording      = true;
+        recordingStart = Date.now();
+
+        // Timer countdown
+        timerInterval = setInterval(() => {
+            const elapsed = Date.now() - recordingStart;
+            const remaining = Math.max(0, trial.duration - elapsed);
+            const sec = Math.ceil(remaining / 1000);
+            document.getElementById('timer-disp').textContent   = sec;
+            document.getElementById('center-timer').textContent = sec;
+        }, 100);
+
+        // Auto-stop after duration
+        stopTimeout = setTimeout(() => finishTrial(), trial.duration);
+    });
+}
+
+function runCountdown(from, cb) {
+    const ct = document.getElementById('center-timer');
+    let n = from;
+    ct.textContent = n;
+    ct.style.display = 'block';
+    document.getElementById('center-rots').style.display = 'none';
+
+    const iv = setInterval(() => {
+        n--;
+        if (n <= 0) {
+            clearInterval(iv);
+            ct.textContent = TRIAL_SEQ[trialIdx].duration / 1000;
+            document.getElementById('center-rots').style.display = 'block';
+            cb();
+        } else {
+            ct.textContent = n;
+        }
+    }, 1000);
+}
+
+function stopRecordingEarly(reason) {
+    if (!recording) return;
+    recording = false;
+    clearInterval(timerInterval); timerInterval = null;
+    clearTimeout(stopTimeout);    stopTimeout    = null;
+
+    if (reason === 'hand_lost') {
+        // Show "hand lost" overlay then retry same trial
+        const ov = document.getElementById('trial-overlay');
+        document.getElementById('assessment-page').classList.remove('visible');
+        document.getElementById('tov-label').textContent = TRIAL_SEQ[trialIdx].seqLabel;
+        document.getElementById('tov-title').innerHTML   = '<span style="color:var(--amber)">Hand Lost</span>';
+        document.getElementById('tov-instr').innerHTML   = 'Keep your hand clearly visible throughout the trial.<br>Press SPACE to retry.';
+        document.getElementById('tov-footer').textContent = 'Press SPACE to retry';
+        document.getElementById('rest-bar-wrap').style.display = 'none';
+        ov.classList.add('visible');
+        window._spaceReady = true;
+    }
+}
+
+function finishTrial() {
+    if (!recording) return;
+    recording = false;
+    clearInterval(timerInterval); timerInterval = null;
+    clearTimeout(stopTimeout);    stopTimeout    = null;
+
+    document.getElementById('center-timer').style.display = 'none';
+    document.getElementById('center-rots').style.display  = 'none';
+    document.getElementById('angle-bar-wrap').style.display = 'none';
+
+    const trial = TRIAL_SEQ[trialIdx];
+
+    // Compute features
+    const features = computeTrialFeatures(rawAngles, rawTimes, calibData[trial.hand]);
+
+    if (!trial.isPractice && features) {
+        const result = {
+            ...features,
+            trialNumber: trial.trialNumber,
+            hand:        trial.hand,
+            isPractice:  false,
+            completedAt: new Date().toISOString(),
+        };
+        allTrialResults.push(result);
+
+        // Save to Firebase (async, don't block UI)
+        saveTrialData(result, [...rawAngles], [...rawTimes], [...frameData]);
+    }
+
+    trialIdx++;
+
+    if (trialIdx >= TRIAL_SEQ.length) {
+        // All done
+        computeAndSaveHandAsymmetry();
+        document.getElementById('assessment-page').classList.remove('visible');
+        showQuestionnaire();
+        return;
+    }
+
+    const nextTrial = TRIAL_SEQ[trialIdx];
+    const prevTrial = TRIAL_SEQ[trialIdx - 1];
+
+    // Decide rest period and whether to do calibration for new hand
+    if (prevTrial.hand !== nextTrial.hand) {
+        // Hand switch: do calibration before new hand
+        showPreTrialOverlay(false); // show switch screen first
+        // Override: set flag so SPACE triggers calibration then practice
+        window._spaceReady = false;
+        document.getElementById('tov-footer').textContent = 'Press SPACE to calibrate left hand';
+        window._spaceNextCalib = true;
+        window._spaceReady = true;
+    } else {
+        const restDur = prevTrial.isPractice ? REST_AFTER.practice : REST_AFTER.scored;
+        showPreTrialOverlay(true, restDur);
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FIREBASE SAVING
+════════════════════════════════════════════════════════════════ */
+async function saveTrialData(result, angles, times, frames) {
+    const docId = `${participantID}_t${result.trialNumber}`;
+    const summary = {
+        participantID,
+        trialNumber:        result.trialNumber,
+        hand:               result.hand,
+        isPractice:         result.isPractice,
+        rotationFrequency:  result.rotationFrequency,
+        meanAmplitude:      result.meanAmplitude,
+        peakVelocity:       result.peakVelocity,
+        rhythmCV:           result.rhythmCV,
+        amplitudeDecrement: result.amplitudeDecrement,
+        hesitationCount:    result.hesitationCount,
+        dimJerk:            result.dimJerk,
+        handAsymmetry:      null, // filled after both hands
+        avgFPS:             result.avgFPS,
+        framesRecorded:     result.framesRecorded,
+        lowConfidencePct:   result.lowConfidencePct,
+        qcFlags:            result.qcFlags,
+        calibration:        result.calibration,
+        completedAt:        result.completedAt,
+        deviceInfo,
+    };
+
+    // Save summary with retry
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            await db.collection('ProSupTrials').doc(docId).set(summary);
+            console.log(`✅ ProSupTrials saved: trial ${result.trialNumber}`);
+            break;
+        } catch (e) {
+            if (attempt === 2) console.error('❌ Failed to save trial summary', e);
+            else await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
+    }
+
+    // Save raw landmarks in batches of 60
+    const BATCH_SIZE = 60;
+    for (let start = 0; start < frames.length; start += BATCH_SIZE) {
+        const batch = frames.slice(start, start + BATCH_SIZE);
+        const batchIdx = Math.floor(start / BATCH_SIZE);
+        const batchDoc = {
+            participantID,
+            trialNumber: result.trialNumber,
+            hand:        result.hand,
+            batchIndex:  batchIdx,
+            frameCount:  batch.length,
+            timestamp:   new Date().toISOString(),
+            timestamps:  batch.map(f => f.timestamp),
+            rawAngles:   batch.map(f => f.rawAngle),
+            confidence:  batch.map(f => f.conf),
+            wrist_x:     batch.map(f => f.wrist.x),
+            wrist_y:     batch.map(f => f.wrist.y),
+            wrist_z:     batch.map(f => f.wrist.z),
+            thumbTip_x:  batch.map(f => f.thumbTip.x),
+            thumbTip_y:  batch.map(f => f.thumbTip.y),
+            thumbTip_z:  batch.map(f => f.thumbTip.z),
+            middleMCP_x: batch.map(f => f.middleMCP.x),
+            middleMCP_y: batch.map(f => f.middleMCP.y),
+            middleMCP_z: batch.map(f => f.middleMCP.z),
+            middleTip_x: batch.map(f => f.middleTip.x),
+            middleTip_y: batch.map(f => f.middleTip.y),
+            middleTip_z: batch.map(f => f.middleTip.z),
+        };
+
+        const batchId = `${participantID}_t${result.trialNumber}_b${batchIdx}`;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                await db.collection('ProSupLandmarks').doc(batchId).set(batchDoc);
+                break;
+            } catch (e) {
+                if (attempt === 2) console.error(`❌ Failed to save landmark batch ${batchIdx}`, e);
+                else await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            }
+        }
+        await new Promise(r => setTimeout(r, 80)); // small delay between batches
+    }
+}
+
+function computeAndSaveHandAsymmetry() {
+    const rightTrials = allTrialResults.filter(t => t.hand === 'right');
+    const leftTrials  = allTrialResults.filter(t => t.hand === 'left');
+    if (rightTrials.length === 0 || leftTrials.length === 0) return;
+
+    const rightFreq = rightTrials.reduce((s,t) => s + t.rotationFrequency, 0) / rightTrials.length;
+    const leftFreq  = leftTrials.reduce((s,t)  => s + t.rotationFrequency, 0) / leftTrials.length;
+    const sum = rightFreq + leftFreq;
+    const asymmetry = sum > 0 ? Math.abs(rightFreq - leftFreq) / (sum / 2) : null;
+
+    // Update all trial docs with asymmetry
+    allTrialResults.forEach(t => { t.handAsymmetry = asymmetry; });
+
+    for (const t of allTrialResults) {
+        const docId = `${participantID}_t${t.trialNumber}`;
+        db.collection('ProSupTrials').doc(docId)
+          .update({ handAsymmetry: asymmetry })
+          .catch(() => {});
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   QUESTIONNAIRE
+════════════════════════════════════════════════════════════════ */
+function showQuestionnaire() {
+    document.getElementById('assessment-page').classList.remove('visible');
+    document.getElementById('trial-overlay').classList.remove('visible');
+
+    // Populate Likert scales
+    const buildLikert = (id, name) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = '';
+        for (let i = 1; i <= 7; i++) {
+            el.innerHTML += `<label><input type="radio" name="${name}" value="${i}" required><span>${i}</span></label>`;
+        }
+    };
+    buildLikert('fatigue-scale', 'fatigue');
+    buildLikert('motivation-scale', 'motivation');
+
+    document.getElementById('questionnaire-overlay').classList.add('visible');
+
+    document.getElementById('q-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const responses = {};
+        for (const [k,v] of fd.entries()) responses[k] = v;
+        if (responses.feedback && responses.feedback.length < 10) {
+            alert('Please provide at least 10 characters of feedback.');
+            return;
+        }
+
+        const qData = {
+            participantID,
+            neurological:   responses.neurological,
+            wristInjury:    responses.wrist_injury,
+            handedness:     responses.handedness,
+            accuracy:       responses.accuracy,
+            fatigue:        parseInt(responses.fatigue),
+            motivation:     parseInt(responses.motivation),
+            feedback:       responses.feedback,
+            completedAt:    new Date().toISOString(),
+        };
+
+        const saves = [
+            db.collection('ProSupQuestionnaire').doc(participantID).set(qData),
+            db.collection('ProSupParticipants').doc(participantID).set({ questionnaire: qData }, { merge: true }),
+        ];
+        await Promise.allSettled(saves);
+
+        document.getElementById('questionnaire-overlay').classList.remove('visible');
+        showResults();
+    });
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESULTS PAGE
+════════════════════════════════════════════════════════════════ */
+function showResults() {
+    document.body.classList.add('results-mode');
+    const page = document.getElementById('results-page');
+    page.classList.add('visible');
+
+    const rightRes  = allTrialResults.filter(t => t.hand === 'right');
+    const leftRes   = allTrialResults.filter(t => t.hand === 'left');
+    const rightFreq = rightRes.length ? rightRes.reduce((s,t) => s+t.rotationFrequency, 0) / rightRes.length : 0;
+    const leftFreq  = leftRes.length  ? leftRes.reduce((s,t) => s+t.rotationFrequency,  0) / leftRes.length  : 0;
+    const bothCount = (rightRes.length ? 1 : 0) + (leftRes.length ? 1 : 0);
+    const avgFreq   = bothCount > 0 ? (rightFreq + leftFreq) / bothCount : 0;
+
+    const prolificCode = generateCode();
+
+    const shareText = `I completed the hand rotation assessment — ${avgFreq.toFixed(1)} rotations/sec average (Right: ${rightFreq.toFixed(1)}, Left: ${leftFreq.toFixed(1)})`;
+
+    page.innerHTML = `
+        <div class="geo geo-1"></div>
+        <div class="geo geo-2"></div>
+        <div style="position:relative;z-index:1;max-width:560px;margin:0 auto;padding:3rem 1.5rem">
+
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:2.5rem;text-align:center">Assessment Complete</div>
+
+        <!-- Hero metric -->
+        <div class="results-card" style="text-align:center;padding:2.5rem 2rem;margin-bottom:1.5rem">
+            <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:1rem">Average Rotation Speed</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:5rem;font-weight:200;color:var(--text);line-height:1;margin-bottom:.5rem">${avgFreq > 0 ? avgFreq.toFixed(1) : '—'}</div>
+            <div style="font-size:1rem;color:var(--muted);margin-bottom:1.75rem">rotations per second</div>
+            <div style="display:flex;justify-content:center;gap:2.5rem;font-size:.85rem;color:var(--muted)">
+                <span>Right <strong style="color:var(--text);font-family:'JetBrains Mono',monospace">${rightFreq > 0 ? rightFreq.toFixed(1) : '—'}</strong></span>
+                <span>Left <strong style="color:var(--text);font-family:'JetBrains Mono',monospace">${leftFreq > 0 ? leftFreq.toFixed(1) : '—'}</strong></span>
+            </div>
+        </div>
+
+        <!-- Share button -->
+        <div style="text-align:center;margin-bottom:2rem">
+            <button class="share-btn" id="share-btn" onclick="handleShare('${shareText.replace(/'/g,"\\'")}')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Share your result
+            </button>
+        </div>
+
+        <!-- Prolific code -->
+        <div class="prolific-code-box">
+            <div style="font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.5rem">Completion Code</div>
+            <div class="prolific-code">${prolificCode}</div>
+            <div style="font-size:.85rem;color:var(--muted)">Enter this code on Prolific to complete the study</div>
+        </div>
+
+        </div>
+    `;
+
+    db.collection('ProSupParticipants').doc(participantID)
+      .set({ completedAt: new Date().toISOString(), prolificCode }, { merge: true })
+      .catch(() => {});
+}
+
+function handleShare(text) {
+    if (navigator.share) {
+        navigator.share({ title: 'Hand Rotation Assessment', text }).catch(() => {});
+    } else {
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('share-btn');
+            if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share your result`; }, 2000); }
+        }).catch(() => {});
+    }
+}
+
+
+function generateCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+/* ════════════════════════════════════════════════════════════════
+   INPUT HANDLING
+════════════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space') return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    e.preventDefault();
+
+    if (window._spaceReady) {
+        if (window._spaceNextCalib) {
+            window._spaceNextCalib = false;
+            window._spaceReady = false;
+            startCalibration();
+        } else {
+            beginTrial();
+        }
+    }
+});
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE DETECTION & INIT
+════════════════════════════════════════════════════════════════ */
+function isMobilePhone() {
+    const ua = navigator.userAgent;
+    const isPhone = /Android|iPhone|iPod/.test(ua)
+                 || (/Mobile/.test(ua) && !/iPad/.test(ua));
+    return isPhone && !/iPad/.test(ua);
+}
+
+function initApp() {
+    if (isMobilePhone()) {
+        document.getElementById('mobile-block').classList.add('visible');
+        return;
+    }
+    document.getElementById('welcome-screen').classList.add('hidden');
+    document.getElementById('loading-overlay').classList.add('visible');
+    setLoaderProgress(10, 'Initializing…');
+    initCamera();
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>
