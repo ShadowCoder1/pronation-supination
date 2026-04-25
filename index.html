@@ -207,6 +207,81 @@ body::before {
 .loader-bar-wrap { width: 280px; height: 4px; background: rgba(59,130,246,.12); border-radius: 2px; overflow: hidden; }
 .loader-bar { height: 100%; background: linear-gradient(90deg, var(--blue), var(--purple)); border-radius: 2px; transition: width .3s ease; width: 0%; }
 
+/* ── ENVIRONMENT CHECK OVERLAY ── */
+#env-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: linear-gradient(to right, rgba(10,10,10,.94) 42%, transparent 56%);
+    z-index: 7500;
+    flex-direction: column; align-items: flex-start; justify-content: center;
+    padding: 4rem 5vw; text-align: left;
+}
+#env-overlay.visible { display: flex; }
+.env-label { font-size: 1rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--blue); margin-bottom: 1.25rem; }
+.env-title { font-size: clamp(2.6rem, 5vw, 4rem); font-weight: 200; letter-spacing: -.02em; color: #fff; margin-bottom: 1.25rem; line-height: 1.1; }
+.env-instruction { font-size: clamp(1rem, 1.4vw, 1.3rem); color: rgba(255,255,255,.75); max-width: 460px; line-height: 1.8; }
+.env-instruction strong { color: #fff; }
+.env-detect-status {
+    margin: 1.5rem 0 .75rem;
+    font-size: 1.15rem; font-weight: 500;
+    color: rgba(255,255,255,.55); letter-spacing: .02em;
+    min-height: 1.5em; transition: color .2s;
+}
+/* Signal quality bar */
+.env-quality-wrap { width: 280px; margin-bottom: 1.5rem; }
+.env-quality-bar-track {
+    height: 8px; background: rgba(255,255,255,.1);
+    border-radius: 4px; overflow: hidden; margin-bottom: .4rem;
+}
+.env-quality-bar {
+    height: 100%; border-radius: 4px; width: 0%;
+    transition: width .15s ease, background .3s ease;
+    background: var(--red);
+}
+.env-quality-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .85rem; color: rgba(255,255,255,.45);
+    display: flex; justify-content: space-between;
+}
+/* Accumulating countdown */
+.env-countdown {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(7rem, 12vw, 10rem); font-weight: 200; color: #fff;
+    line-height: 1; margin: 1.25rem 0 1rem; letter-spacing: -.04em;
+}
+.env-progress { width: 280px; height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; margin-bottom: 1.25rem; }
+.env-progress-bar { height: 100%; background: linear-gradient(90deg, var(--blue), var(--green)); border-radius: 3px; width: 0%; }
+/* Fail state */
+.env-fail-box {
+    max-width: 460px;
+    background: rgba(239,68,68,.12);
+    border: 1px solid rgba(239,68,68,.35);
+    border-radius: 12px; padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+.env-fail-title { font-size: 1.05rem; font-weight: 600; color: #fca5a5; margin-bottom: .6rem; }
+.env-fail-msg { font-size: .95rem; color: rgba(255,255,255,.75); line-height: 1.6; }
+.env-fail-tips { margin-top: .75rem; padding-left: 0; list-style: none; }
+.env-fail-tips li { font-size: .9rem; color: rgba(255,255,255,.65); padding: .2rem 0 .2rem 1rem; position: relative; line-height: 1.5; }
+.env-fail-tips li::before { content: '→'; position: absolute; left: 0; color: var(--amber); }
+.env-retry-btn {
+    background: rgba(255,255,255,.1); border: 1.5px solid rgba(255,255,255,.25);
+    color: #fff; padding: .85rem 2rem;
+    font-size: 1rem; font-weight: 500; font-family: 'Inter', sans-serif;
+    border-radius: 50px; cursor: pointer; transition: all .2s;
+}
+.env-retry-btn:hover { background: rgba(255,255,255,.2); }
+/* Pass state */
+.env-pass-box {
+    display: flex; align-items: center; gap: 1rem;
+    max-width: 400px;
+    background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35);
+    border-radius: 12px; padding: 1.1rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+.env-pass-icon { font-size: 1.8rem; line-height: 1; }
+.env-pass-text { font-size: 1rem; color: rgba(255,255,255,.85); font-weight: 500; }
+
 /* ── CALIBRATION OVERLAY ── */
 /* Sits on top of the assessment page (which stays visible/rendering).
    Dark semi-transparent so the video feed shows through on the right. */
@@ -572,6 +647,42 @@ canvas#overlay { transform: scaleX(-1); }
     <p style="font-size:.85rem;color:#aaa;max-width:280px;text-align:center">Enable camera access when prompted</p>
 </div>
 
+<!-- ── ENVIRONMENT CHECK ── -->
+<div id="env-overlay">
+    <div class="env-label">Step 1 — Environment Check</div>
+    <div class="env-title">Check your<br>setup first</div>
+    <div class="env-instruction">
+        Hold your <strong>right hand</strong> toward the camera, palm down — like you will during the task.
+        Keep it still for 5 seconds.
+    </div>
+    <div class="env-detect-status" id="env-detect-status">Position your hand in view…</div>
+    <div class="env-quality-wrap">
+        <div class="env-quality-bar-track">
+            <div class="env-quality-bar" id="env-quality-bar"></div>
+        </div>
+        <div class="env-quality-label">
+            <span id="env-conf-live">conf —</span>
+            <span id="env-fps-live">— fps</span>
+        </div>
+    </div>
+    <div class="env-countdown" id="env-count">5</div>
+    <div class="env-progress"><div class="env-progress-bar" id="env-bar"></div></div>
+    <div id="env-fail" style="display:none">
+        <div class="env-fail-box">
+            <div class="env-fail-title" id="env-fail-title">Setup issue detected</div>
+            <div class="env-fail-msg" id="env-fail-msg"></div>
+            <ul class="env-fail-tips" id="env-fail-tips"></ul>
+        </div>
+        <button class="env-retry-btn" onclick="retryEnvironmentCheck()">Try again →</button>
+    </div>
+    <div id="env-pass" style="display:none">
+        <div class="env-pass-box">
+            <div class="env-pass-icon">✓</div>
+            <div class="env-pass-text">Great setup — starting calibration…</div>
+        </div>
+    </div>
+</div>
+
 <!-- ── CALIBRATION ── -->
 <div id="calib-overlay">
     <div class="calib-phase" id="calib-phase">Calibration — Right Hand</div>
@@ -626,18 +737,13 @@ canvas#overlay { transform: scaleX(-1); }
 
             <div class="live-metrics">
                 <div class="metric-row">
-                    <span class="metric-name">Speed</span>
-                    <span class="metric-val" id="live-freq">—</span>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-name">Angle</span>
-                    <span class="metric-val" id="live-angle">—</span>
-                </div>
-                <div class="metric-row">
                     <span class="metric-name">Confidence</span>
                     <span class="metric-val" id="live-conf">—</span>
                 </div>
             </div>
+            <!-- Hidden spans kept so JS writes don't throw -->
+            <span id="live-freq" style="display:none"></span>
+            <span id="live-angle" style="display:none"></span>
 
         </div>
 
@@ -1197,6 +1303,7 @@ function onHandsResults(results) {
 
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
         // No hand detected
+        if (_envActive) { _envFrameUpdate(0, false); return; }
         if (calibrating) {
             _calibHandOk = false;
             const statusEl = document.getElementById('calib-detect-status');
@@ -1260,6 +1367,17 @@ function onHandsResults(results) {
     }
 
     // ── CALIBRATION ──
+    // Feed the environment check when active.
+    if (_envActive) {
+        _envFrameUpdate(conf, true);
+        // Still draw the skeleton so participant can see tracking in real time.
+        drawSkeleton(ctx, lm, W, H, conf, isCorrectHand);
+        // Live fps update for env-fps-live label
+        const avgFpsNow = fpsHistory.length ? fpsHistory.reduce((a,b)=>a+b,0) / fpsHistory.length : 0;
+        if (avgFpsNow > 0) document.getElementById('env-fps-live').textContent = `${avgFpsNow.toFixed(0)} fps`;
+        return;
+    }
+
     // _calibHandOk tells the timer whether to accumulate time.
     // We set it here on every MediaPipe frame.
     if (calibrating) {
@@ -1415,7 +1533,7 @@ function initCamera() {
                 setLoaderProgress(100, 'Ready!');
                 setTimeout(() => {
                     document.getElementById('loading-overlay').classList.remove('visible');
-                    startCalibration();
+                    startEnvironmentCheck();
                 }, 500);
             }, 1200);
         };
@@ -1428,6 +1546,178 @@ function initCamera() {
 function setLoaderProgress(pct, msg) {
     document.getElementById('loader-bar').style.width = pct + '%';
     document.getElementById('loader-status').textContent = msg;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ENVIRONMENT CHECK
+════════════════════════════════════════════════════════════════ */
+const ENV_HOLD_MS      = 5000;   // accumulated good-signal time required to pass
+const ENV_CONF_PASS    = 0.70;   // minimum per-frame confidence to count as "good"
+const ENV_CONF_WARN    = 0.60;   // below this = lighting problem, not just marginal
+const ENV_FPS_MIN      = 22;     // below this = device/camera too slow
+const ENV_DROPOUT_MAX  = 0.25;   // if >25% of wall-clock frames had no hand = framing issue
+
+let _envActive    = false;
+let _envAccMs     = 0;           // ms of good signal accumulated so far
+let _envLastTick  = null;        // last timestamp when hand was good
+let _envHandOk    = false;       // set each MediaPipe frame
+let _envConfSums  = [];          // confidence values when hand visible (for avg)
+let _envTotalFrames = 0;         // all frames during wall-clock window
+let _envGoodFrames  = 0;         // frames where hand detected with conf >= ENV_CONF_PASS
+let _envTimer     = null;
+
+function startEnvironmentCheck() {
+    _envActive      = true;
+    _envAccMs       = 0;
+    _envLastTick    = null;
+    _envHandOk      = false;
+    _envConfSums    = [];
+    _envTotalFrames = 0;
+    _envGoodFrames  = 0;
+
+    document.getElementById('assessment-page').classList.add('visible');
+    document.getElementById('env-overlay').classList.add('visible');
+    document.getElementById('env-fail').style.display = 'none';
+    document.getElementById('env-pass').style.display = 'none';
+    document.getElementById('env-bar').style.width    = '0%';
+    document.getElementById('env-bar').style.transition = 'none';
+    document.getElementById('env-count').textContent  = Math.ceil(ENV_HOLD_MS / 1000);
+    document.getElementById('env-detect-status').textContent = 'Position your hand in view…';
+    document.getElementById('env-detect-status').style.color = 'rgba(255,255,255,0.55)';
+    _updateEnvBar(0);
+
+    if (_envTimer) clearInterval(_envTimer);
+    _envTimer = setInterval(_envTick, 50);
+}
+
+function retryEnvironmentCheck() {
+    startEnvironmentCheck();
+}
+
+function _envTick() {
+    _envTotalFrames++;
+    const now = Date.now();
+
+    if (_envHandOk) {
+        if (_envLastTick !== null) _envAccMs += now - _envLastTick;
+        _envLastTick = now;
+        _envGoodFrames++;
+    } else {
+        _envLastTick = null;
+    }
+
+    const remaining = Math.max(0, ENV_HOLD_MS - _envAccMs);
+    const pct = Math.min(100, (_envAccMs / ENV_HOLD_MS) * 100);
+    document.getElementById('env-count').textContent = Math.ceil(remaining / 1000) || 1;
+    document.getElementById('env-bar').style.width = pct.toFixed(1) + '%';
+
+    if (_envAccMs >= ENV_HOLD_MS) {
+        clearInterval(_envTimer); _envTimer = null;
+        _evaluateEnvironment();
+    }
+}
+
+// Called from onHandsResults every frame — updates _envHandOk and quality bar
+function _envFrameUpdate(conf, handVisible) {
+    if (!_envActive) return;
+    const ok = handVisible && conf >= ENV_CONF_PASS;
+    _envHandOk = ok;
+    if (handVisible) _envConfSums.push(conf);
+
+    // Live quality bar: width = conf * 100, color = red/amber/green
+    const pct = handVisible ? Math.round(conf * 100) : 0;
+    _updateEnvBar(pct);
+    document.getElementById('env-conf-live').textContent = handVisible ? `conf ${pct}%` : 'conf —';
+
+    if (ok) {
+        document.getElementById('env-detect-status').textContent = 'Hold still… good signal';
+        document.getElementById('env-detect-status').style.color = 'rgba(34,197,94,0.9)';
+    } else if (handVisible && conf < ENV_CONF_PASS) {
+        document.getElementById('env-detect-status').textContent = 'Hand detected — signal too weak';
+        document.getElementById('env-detect-status').style.color = 'rgba(245,158,11,0.85)';
+    } else {
+        document.getElementById('env-detect-status').textContent = 'Position your hand in view…';
+        document.getElementById('env-detect-status').style.color = 'rgba(255,255,255,0.55)';
+    }
+}
+
+function _updateEnvBar(confPct) {
+    const bar = document.getElementById('env-quality-bar');
+    bar.style.width = confPct + '%';
+    if (confPct >= 70) bar.style.background = 'var(--green)';
+    else if (confPct >= 55) bar.style.background = 'var(--amber)';
+    else bar.style.background = 'var(--red)';
+}
+
+function _evaluateEnvironment() {
+    _envActive = false;
+
+    const avgConf    = _envConfSums.length ? _envConfSums.reduce((a,b)=>a+b,0) / _envConfSums.length : 0;
+    const detectionRate = _envTotalFrames > 0 ? _envGoodFrames / _envTotalFrames : 0;
+    const avgFPS     = fpsHistory.length ? fpsHistory.reduce((a,b)=>a+b,0) / fpsHistory.length : 0;
+
+    const passFPS      = avgFPS >= ENV_FPS_MIN || fpsHistory.length === 0; // don't penalise if FPS not yet measured
+    const passConf     = avgConf >= ENV_CONF_PASS;
+    const passDropout  = (1 - detectionRate) <= ENV_DROPOUT_MAX;
+
+    if (passConf && passDropout && passFPS) {
+        // ── PASS ──
+        document.getElementById('env-pass').style.display = 'block';
+        document.getElementById('env-detect-status').textContent = 'All good!';
+        document.getElementById('env-detect-status').style.color = 'rgba(34,197,94,0.9)';
+        setTimeout(() => {
+            document.getElementById('env-overlay').classList.remove('visible');
+            startCalibration();
+        }, 1500);
+        return;
+    }
+
+    // ── FAIL — diagnose specifically ──
+    let title, msg, tips;
+
+    if (!passFPS) {
+        title = 'Camera or device is too slow';
+        msg   = `Your camera is running at ${Math.round(avgFPS)} fps. This task requires at least ${ENV_FPS_MIN} fps for accurate measurement.`;
+        tips  = [
+            'Close other browser tabs and applications',
+            'Restart your browser and try again',
+            'Try a different browser (Chrome is recommended)',
+        ];
+    } else if (!passConf && avgConf < ENV_CONF_WARN) {
+        title = 'Lighting is too poor';
+        msg   = `Your hand detection confidence was ${Math.round(avgConf * 100)}% — below the ${Math.round(ENV_CONF_PASS * 100)}% minimum needed for reliable data.`;
+        tips  = [
+            'Move to a well-lit room, or turn on more overhead lights',
+            'Avoid sitting with a bright window behind you (backlighting)',
+            'Move your hand closer to the camera (40–70 cm away)',
+            'Avoid dark gloves or dark-coloured clothing on your forearm',
+        ];
+    } else if (!passConf) {
+        title = 'Lighting is marginal';
+        msg   = `Detection confidence was ${Math.round(avgConf * 100)}% — just below what we need. Even a small lighting improvement will get you through.`;
+        tips  = [
+            'Turn on a desk lamp or overhead light pointed toward your hand',
+            'Move to a slightly brighter spot',
+            'Make sure your hand is fully in frame',
+        ];
+    } else {
+        // passConf but bad dropout = framing / camera position issue
+        title = 'Hand kept leaving the frame';
+        msg   = `Your hand was visible for only ${Math.round(detectionRate * 100)}% of the check window. The camera needs to see your hand continuously.`;
+        tips  = [
+            'Position your camera at about shoulder height and 50–70 cm away',
+            'Make sure your full hand and wrist are visible throughout',
+            'Avoid moving your arm away from the camera during measurement',
+        ];
+    }
+
+    document.getElementById('env-fail-title').textContent = title;
+    document.getElementById('env-fail-msg').textContent   = msg;
+    const tipsEl = document.getElementById('env-fail-tips');
+    tipsEl.innerHTML = tips.map(t => `<li>${t}</li>`).join('');
+    document.getElementById('env-fail').style.display = 'block';
+    document.getElementById('env-count').style.display = 'none';
+    document.getElementById('env-bar').style.width = '0%';
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -1598,7 +1888,7 @@ function showPreTrialOverlay(isRest, restDuration) {
             bar.style.width = '0%';
         }, 50);
 
-        setTimeout(() => showPreTrialOverlay(false), restDuration);
+        setTimeout(() => runReadySetGo(() => beginTrialNoOverlay()), restDuration);
         return;
     }
 
@@ -1623,10 +1913,19 @@ function showPreTrialOverlay(isRest, restDuration) {
 function beginTrial() {
     if (!window._spaceReady) return;
     window._spaceReady = false;
-
     document.getElementById('trial-overlay').classList.remove('visible');
     document.getElementById('assessment-page').classList.add('visible');
+    startRecording();
+}
 
+// Called automatically after rest bar — no SPACE needed.
+function beginTrialNoOverlay() {
+    document.getElementById('trial-overlay').classList.remove('visible');
+    document.getElementById('assessment-page').classList.add('visible');
+    startRecording();
+}
+
+function startRecording() {
     const trial = TRIAL_SEQ[trialIdx];
     document.getElementById('trial-seq-label').textContent = trial.seqLabel;
     document.getElementById('hand-label').textContent = trial.hand === 'right' ? 'Right Hand' : 'Left Hand';
@@ -1639,7 +1938,6 @@ function beginTrial() {
 
     document.getElementById('rots-num').textContent     = '0';
     document.getElementById('center-rots').textContent  = '0 rotations';
-    document.getElementById('live-freq').textContent    = '—';
     document.getElementById('status-pill').style.display = '';
     document.getElementById('angle-bar-wrap').style.display = 'block';
 
@@ -1654,7 +1952,6 @@ function beginTrial() {
         recording      = true;
         recordingStart = Date.now();
 
-        // Timer countdown
         timerInterval = setInterval(() => {
             const elapsed = Date.now() - recordingStart;
             const remaining = Math.max(0, trial.duration - elapsed);
@@ -1663,9 +1960,30 @@ function beginTrial() {
             document.getElementById('center-timer').textContent = sec;
         }, 100);
 
-        // Auto-stop after duration
         stopTimeout = setTimeout(() => finishTrial(), trial.duration);
     });
+}
+
+// READY → SET → GO! displayed on the rest overlay, then cb() fires.
+function runReadySetGo(cb) {
+    const ov = document.getElementById('trial-overlay');
+    document.getElementById('rest-bar-wrap').style.display = 'none';
+    document.getElementById('tov-footer').style.display    = 'none';
+    document.getElementById('tov-instr').textContent       = '';
+
+    const steps = ['READY', 'SET', 'GO!'];
+    let i = 0;
+    document.getElementById('tov-title').textContent = steps[0];
+
+    const iv = setInterval(() => {
+        i++;
+        if (i >= steps.length) {
+            clearInterval(iv);
+            cb();
+        } else {
+            document.getElementById('tov-title').textContent = steps[i];
+        }
+    }, 900);
 }
 
 function runCountdown(from, cb) {
